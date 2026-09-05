@@ -20,7 +20,7 @@ jobs:
             if (!rr.ok) throw new Error('token request '+rr.status);
             const token = (await rr.json()).value;
             const [h,p,s] = token.split('.');
-            const dec = x => Buffer.from(x.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(x.length/4)*4,'='));
+            const dec = x => Buffer.from(x.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(x.length/4)*4,'='),'base64');
             const header = JSON.parse(dec(h)); const claims=JSON.parse(dec(p));
             const cfg=await (await fetch(claims.iss+'/.well-known/openid-configuration')).json();
             const jwks=await (await fetch(cfg.jwks_uri)).json(); const jwk=jwks.keys.find(k=>k.kid===header.kid);
